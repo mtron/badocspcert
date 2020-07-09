@@ -1,27 +1,33 @@
 #!/bin/bash
+# Detect Certs affected by Revocation on 11.07.2020
+
+RED='\033[0;31m'
+NC='\033[0m'
 
 if [ -z "$1" ]; then
 	echo -e "Usage:"
-	echo -e "\t$0 [host]"
+	echo -e "\t$0 [fqdn]"
 	exit 1
 fi
 
 TMP="$(mktemp -d)"
+
+ping -c 1 $1 &> /dev/null || echo -e "ERROR: Host \"$1\" not found or down"
 
 openssl s_client -connect "$1:443" -showcerts < /dev/null &> "$TMP/_ossl.txt"
 
 csplit -s -f "$TMP/_pem" "$TMP/_ossl.txt" '/-----BEGIN CERTIFICATE-----/' '{*}'
 
 for pem in "$TMP"/_pem*; do
-	hash=$(openssl x509 -in "$pem" -outform der 2>/dev/null | \
-		openssl dgst -sha256 -binary | base64)
-	grep -q "$hash" "$0" && echo "$1 affected"
+	hash=$(openssl x509 -in "$pem" -outform der 2>/dev/null | openssl dgst -sha256 -binary | base64)
+	grep -q "$hash" "$0" && echo -e "${RED}WARNING: SSL crt on \"$1\" affected!${NC}"
 done
 
 rm -r "$TMP"
 
 # We grep this script for the affected intermediates as base64 encoded sha256 hashes,
 # so we list them here as a comment:
+#vmoNnh0RXyKT9qvxGz7I6ILiRCbu6wmqpQNZeZPneiU=
 #wXYR23sxE2HiDXuCMarfR4vLf/oL5YXAbeIwkiPC74o=
 #/bNF0mk3ftnTQwi7eIVjKzDmH46vt+tedfgCTV/U4Yc=
 #16BtRir8gNcRg9lKOYstzIJYNefGbaXkVAVXLwSwWl0=
